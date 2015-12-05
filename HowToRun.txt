@@ -1,0 +1,55 @@
+For Visual Studio:
+
+BUILD PBRT
+1. Navigate to "src" folder
+2. Select the folder corresponding to your version of Visual Studio
+		(ie. For Visual Studio 2012, you would navigate to the "pbrt.vs2012" folder)
+3. Open the solution file: "pbrt.sln"
+4. Switch the desired mode to Debug/Release and x32/x64
+5. Build solution (File->Build Solution or just press F7)
+		All 8 solutions should successfully build
+		
+RUN PBRT 
+Method 1 (Quick and easy)
+1. Right click the pbrt project and go to "Properties"
+2. Go to Configuration Properties->Debugging
+3. Put the following in "Command Arguments":
+		../../scenes/bunny.pbrt
+
+This will run the bunny scene from a few folders over and output it the result as pbrt.exr.
+The output will be in the solution folder (from the build section). 
+
+Method 2 (Preferred)
+1. Set up a system environmental variable called PBRT_SEARCHPATH that points to the pbrt bin folder
+	(ie. C:\pbrt-v2\bin)
+
+2. Install cygwin with the bison and flex packages (Note: these packages aren't selected by default so you have to search and make sure they are not "Skipped")
+
+3. Add the following to the end of your .bashrc file (usually something like C:/cygwin64/etc/bash.bashrc):
+	
+	export PBRT_SEARCHPATH=/cygdrive/c/pbrt-v2/bin
+	export PATH=$PBRT_SEARCHPATH:$PATH
+	
+	where the c/pbrt-v2/bin portion depends on where you have your pbrt bin folder (same as part 1 of this method).
+	
+4. Open a cygwin terminal and navigate to the scene file you want to run
+	For example, in the cygwin terminal write:
+	cd /cygdrive/c/pbrt-v2/scenes/
+	
+5. Run pbrt with the following:
+	pbrt bunny.pbrt
+	
+This will run the bunny scene in this folder and output the result as pbrt.exr in the same folder
+
+COMMAND LINE ARGUMENTS
+
+pbrt [--ncores numOfCores] [--outfile nameOfOutput] [--quick] [--quiet] [--verbose] [--help] <filename.pbrt>
+
+For example a typical pbrt command might look something like this:
+pbrt --ncores 8 --outfile bunny.exr bunny.pbrt
+
+which would run pbrt on the bunny scene with 8 cores (multithreaded) and output the rendered image as bunny.exr in the current folder.
+
+Note: Method 1 would not need the "pbrt" part of the above command. Method 2 would use the command as is.
+
+The first time I installed pbrt I used this site as a resource (http://qiaohongli.blogspot.com/2012/07/install-pbrt-for-windows-7-visual.html).
