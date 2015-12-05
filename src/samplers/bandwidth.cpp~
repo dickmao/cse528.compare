@@ -1,0 +1,308 @@
+
+/*
+ *  Copyright(c) 2011 Fabrice Rousselle.
+ * 
+ *  You can redistribute and/or modify this file under the terms of the GNU
+ *  General Public License as published by the Free Software Foundation; either
+ *  version 2 of the License, or (at your option) any later version.
+ */
+
+#include <vector>
+#include <limits>
+#include <algorithm>
+
+#include "bandwidth.h"
+#include "montecarlo.h"
+#include "camera.h"
+#include "denoiser.h"
+
+BandwidthSampler::BandwidthSampler(int xstart, int xend, int ystart, int yend,
+    int spp, float sopen, float sclose, float threshold, int nIterations,
+    const SmoothFilm *film)
+    : Sampler(xstart, xend, ystart, yend, spp, sopen, sclose),
+      _xPixelCount(film->GetXPixelCount()),
+      _yPixelCount(film->GetYPixelCount()),
+      _nIterations(nIterations),
+      _film(film) {
+
+    _xPos = xstart;
+    _yPos = ystart;
+    _xStartSub = xstart; _xEndSub = xend;
+    _yStartSub = ystart; _yEndSub = yend;
+    initBase(NULL);
+}
+
+
+BandwidthSampler::BandwidthSampler(const BandwidthSampler *parent, int xstart,
+    int xend, int ystart, int yend)
+    : Sampler(parent->xPixelStart, parent->xPixelEnd, parent->yPixelStart,
+      parent->yPixelEnd, parent->samplesPerPixel, parent->shutterOpen,
+      parent->shutterClose),
+      _xPixelCount(parent->_xPixelCount),
+      _yPixelCount(parent->_yPixelCount),
+      _nIterations(parent->_nIterations),
+      _film(parent->_film) {
+
+    _xPos = xstart;
+    _yPos = ystart;
+    _xStartSub = xstart; _xEndSub = xend;
+    _yStartSub = ystart; _yEndSub = yend;
+    initBase(parent);
+}
+
+
+BandwidthSampler::BandwidthSampler(const BandwidthSampler *parent,
+    const PixelAreaVec &pixels, int taskNum, int nPixels)
+    : Sampler(parent->xPixelStart, parent->xPixelEnd, parent->yPixelStart,
+      parent->yPixelEnd, parent->samplesPerPixel, parent->shutterOpen,
+      parent->shutterClose),
+      _xPixelCount(parent->_xPixelCount),
+      _yPixelCount(parent->_yPixelCount),
+      _nIterations(parent->_nIterations),
+      _film(parent->_film) {
+
+    initAdapt(parent, pixels, taskNum, nPixels);
+}
+
+
+BandwidthSampler::~BandwidthSampler() {
+    if (_samplerInit != NULL) delete _samplerInit;
+    if (_isMainSampler) {
+        delete [] _scrambling;
+        int nPix = _xPixelCount * _yPixelCount;
+        for (int pix = 0; pix < nPix; pix++)
+            Mutex::Destroy(_pixelMutexes[pix]);
+        delete [] _pixelMutexes;
+    }
+}
+
+
+PixelAreaVec BandwidthSampler::MarkAdaptPixels(const std::vector<float >& w_ij, 
+					       int howmany) 
+{
+    struct Comp{
+	Comp( const vector<float>& v ) : _v(v) {}
+	bool operator ()(int a, int b) { return _v[a] > _v[b]; }
+	const vector<float>& _v;
+    };
+    
+    vector<int> vx;
+    vx.resize(w_ij.size());
+    for( int i = 0; i<w_ij.size(); ++i ) vx[i]= i;
+    std::partial_sort(vx.begin(), vx.begin()+howmany, vx.end(), Comp(w_ij));
+
+    PixelAreaVec result(howmany);
+    for (int i=0; i<howmany; ++i) {
+        int pix = w_ij[vx[i]];
+        // Compute pixel coordinates
+        int yPos = pix / _xPixelCount;
+        int xPos = pix - yPos * _xPixelCount;
+        // Store sampling area
+        result[i]._pix = pix;
+        result[i]._xPos = xPos + .5f;
+        result[i]._yPos = yPos + .5f;
+        result[i]._scale = 0;
+    }
+    return result;
+}
+
+void BandwidthSampler::initBase(const BandwidthSampler * parent) {
+    // Number of samples for the initialization phase
+    if (_nIterations == 0) // non-adaptive
+        _sppInit = samplesPerPixel;
+    else // adaptive
+        _sppInit = max(4, samplesPerPixel);
+    
+    _adaptive = false;
+
+    // Construct the sampler for the initialization phase
+    _samplerInit = new LDSampler(_xStartSub, _xEndSub, _yStartSub, _yEndSub,
+        _sppInit, shutterOpen, shutterClose);
+
+    // Compute the total number of pixels to be generated
+    int nPix = _xPixelCount * _yPixelCount;
+    int nSamplesInit = _sppInit * nPix;
+    int nSamplesAdapt = samplesPerPixel * nPix - nSamplesInit;
+    _pixelsToSampleTotal = Ceil2Int(float(nSamplesAdapt) / samplesPerPixel);
+
+    if (parent != NULL) {
+        _xPos = _xStartSub;
+        _yPos = _yStartSub;
+        _isMainSampler = false;
+        _scrambling = parent->_scrambling;
+        _pixelMutexes = parent->_pixelMutexes;
+    }
+    else {
+        _xPos = xPixelStart;
+        _yPos = yPixelStart;
+        _isMainSampler = true;
+        _scrambling = new ScramblingInfo[nPix];
+        _pixelMutexes = new Mutex*[nPix];
+        for (int pix = 0; pix < nPix; pix++) {
+            _pixelMutexes[pix] = Mutex::Create();
+        }
+    }
+
+    _film->GetFilterbank(_filters);
+}
+
+
+void BandwidthSampler::initAdapt(const BandwidthSampler * parent,
+                                 const PixelAreaVec &pixels, int taskNum,
+                                 int nPixels) {
+    _adaptive = true;
+    _samplerInit = NULL;
+
+    int first = taskNum * nPixels;
+    int last = min(int(pixels.size()), first + nPixels);
+    _pixels.resize(max(0, last-first));
+    if (_pixels.size() > 0)
+        copy(pixels.begin()+first, pixels.begin()+last, _pixels.begin());
+    
+    // Compute the total number of pixels to be generated
+    int nPix = _xPixelCount * _yPixelCount;
+    
+    _xPos = xPixelStart;
+    _yPos = yPixelStart;
+    if (parent != NULL) {
+        _isMainSampler = false;
+        _scrambling = parent->_scrambling;
+        _pixelMutexes = parent->_pixelMutexes;
+    }
+    else {
+        _isMainSampler = true;
+        _scrambling = new ScramblingInfo[nPix];
+        _pixelMutexes = new Mutex*[nPix];
+        for (int pix = 0; pix < nPix; pix++) {
+            _pixelMutexes[pix] = Mutex::Create();
+        }
+    }
+    
+    _film->GetFilterbank(_filters);
+}
+
+
+Sampler *BandwidthSampler::GetSubSampler(int num, int count) {
+    if (!_adaptive) {
+        int x0, x1, y0, y1;
+        ComputeSubWindow(num, count, &x0, &x1, &y0, &y1);
+        if (x0 == x1 || y0 == y1) return NULL;
+        return new BandwidthSampler(this, x0, x1, y0, y1);
+    }
+    else {
+        // Compute the number of pixels for this sub-sampler
+        int pixelsToSample = PixelsToSample(); // total job
+        pixelsToSample = Ceil2Int(float(pixelsToSample) / count); // this job
+        // Create sub-sampler
+        return new BandwidthSampler(this, _pixels, num, pixelsToSample);
+    }
+}
+
+
+int BandwidthSampler::GetMoreSamples(Sample *samples, RNG &rng) {
+    // During the initialization phase, we generate samples in each pixel using
+    // a standard stratified sampler.
+    if (!_adaptive) {
+        // Draw a set of random samples
+        int nSamples = _samplerInit->GetMoreSamples(samples, rng);
+
+        // Replace image samples with low-discrepancy samples inside film buffer
+        for (int i = 0; i < 0; i++) {
+            int xPos = samples[i].imageX;
+            int yPos = samples[i].imageY;
+            if (xPos >= 0 && yPos >= 0 && xPos < _xPixelCount && yPos < _yPixelCount) {
+                int pix = xPos + yPos * _xPixelCount; // pixel offset
+                // Seed low-discrepancy scrambling for this pixel
+                if (_scrambling[pix]._nGenerated == 0) {
+                    _scrambling[pix]._image[0] = rng.RandomUInt(); // initialize scrambling seed
+                    _scrambling[pix]._image[1] = rng.RandomUInt();
+                }
+                // Draw scrambled low-discrepancy samples
+                float buffer[2]; // 2 floats per image sample
+                LDShuffleScrambled2D(1, 1, _scrambling[pix]._nGenerated, &buffer[0], rng, _scrambling[pix]._image);
+                _scrambling[pix]._nGenerated++;
+                samples[i].imageX = xPos + buffer[0];
+                samples[i].imageY = yPos + buffer[1];
+            }
+        }
+        return nSamples;
+    }
+
+    // Check if we're done
+    if (_pixels.empty()) return 0;
+
+    // Get this pixel's sampling info and pop it
+    float xPos = _pixels.back()._xPos;
+    float yPos = _pixels.back()._yPos;
+    float scale = _pixels.back()._scale;
+    _pixels.pop_back();
+
+    // Temporary buffer to hold low-discrepancy values
+    float buffer[2]; // 2 floats per image sample
+
+    // Get samples
+    for (int i = 0; i < samplesPerPixel; i++) {
+        // Importance sampling
+        float xTmp = rng.RandomFloat(), yTmp = rng.RandomFloat();
+        _filters[scale]->WarpSampleToPixelOffset(xTmp, yTmp);
+        samples[i].imageX = xPos + xTmp;
+        samples[i].imageY = yPos + yTmp;
+        samples[i].lensU = rng.RandomFloat();
+        samples[i].lensV = rng.RandomFloat();
+        samples[i].time = Lerp(rng.RandomFloat(), shutterOpen, shutterClose);
+        // Generate random samples for integrators
+        for (uint32_t j = 0; j < samples[i].n1D.size(); ++j)
+            for (uint32_t k = 0; k < samples[i].n1D[j]; ++k) {
+                samples[i].oneD[j][k] = rng.RandomFloat();
+            }
+        for (uint32_t j = 0; j < samples[i].n2D.size(); ++j)
+            for (uint32_t k = 0; k < 2*samples[i].n2D[j]; ++k)
+                samples[i].twoD[j][k] = rng.RandomFloat();
+
+        // Replace image samples with low-discrepancy samples inside film buffer
+        int xPosSmp = Floor2Int(samples[i].imageX);
+        int yPosSmp = Floor2Int(samples[i].imageY);
+        if (xPosSmp >= 0 && yPosSmp >= 0 && xPosSmp < _xPixelCount && yPosSmp < _yPixelCount) {
+            int pix = xPosSmp + yPosSmp * _xPixelCount; // pixel offset
+            // Lock this pixel
+            MutexLock lock(*(_pixelMutexes[pix]));
+            // Draw the samples
+            LDShuffleScrambled2D(1, 1, _scrambling[pix]._nGenerated, buffer, rng, _scrambling[pix]._image);
+            samples[i].imageX = xPosSmp + buffer[0];
+            samples[i].imageY = yPosSmp + buffer[1];
+            _scrambling[pix]._nGenerated++;
+        }
+    }
+
+    return samplesPerPixel;
+}
+
+
+BandwidthSampler *CreateBandwidthSampler(const ParamSet &params,
+                                const Film *film, const Camera *camera) {
+    int ns = params.FindOneInt("pixelsamples", 32);
+    float th = params.FindOneFloat("threshold", std::numeric_limits<float>::infinity());
+    // By default we update 5% of the image on each iteration
+    int nIterations = params.FindOneInt("niterations", 8);
+
+    int xstart, xend, ystart, yend;
+    film->GetSampleExtent(&xstart, &xend, &ystart, &yend);
+
+    // Ensure we have a 'SmoothFilm'
+    const SmoothFilm *smoothFilm = dynamic_cast<const SmoothFilm *> (film);
+    if (smoothFilm == NULL) {
+        Error("CreateBandwidthSampler(): film is not of type 'SmoothFilm'");
+        return NULL;
+    }
+
+    // Output the sampler parameters
+    Info("CreateBandwidthSampler:\n");
+    Info("   pixelsamples.....: %d\n", ns);
+    Info("   niterations......: %d\n", nIterations);
+
+    return new BandwidthSampler(xstart, xend, ystart, yend, ns,
+                                camera->shutterOpen, camera->shutterClose, th,
+                                nIterations, smoothFilm);
+}
+
+

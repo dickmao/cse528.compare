@@ -37,7 +37,7 @@
 #include "parser.h"
 #include "parallel.h"
 #include "../SampleWriter/Globals.h"	// MOD
-#include "../core/Timer.h"				// MOD
+#include "../core/timer.h"				// MOD
 
 extern char sceneName[BUFFER_SIZE];		// MOD
 extern int pbrtSamplesPerPixel;			// MOD
@@ -111,33 +111,7 @@ int main(int argc, char *argv[]) {
     }
     pbrtCleanup();
 
-	// Timer 
-	timer.Stop();
-	float runtime = timer.Time();
 
-	char tmpFileName[1000];
-	_splitpath(filenames[0].c_str(), NULL, NULL, tmpFileName, NULL);
-	sprintf(tmpFileName, "%s_timing.txt", sceneName);
-
-	FILE* fp;
-	fopen_s(&fp, tmpFileName, "at");
-
-	if(!fp)
-	{
-		fprintf(stderr, "Could not open file %s\n", tmpFileName);
-		getchar();
-		exit(-1);
-	}
-
-	fprintf(fp, "Total Time: %f sec", runtime);
-	fclose(fp);
-
-	printf("Total Time: %f\n", runtime);
-
-	///////////////////////////
-
-	printf("\nTotal Runtime: %f\n", runtime);
-    
 	return 0;
 }
 

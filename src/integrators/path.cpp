@@ -156,20 +156,24 @@ Spectrum PathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         Vector wi;
         float pdf;
         BxDFType flags;
-		Vector* diffRay = new Vector(0, 0, 0);
+	Vector* diffRay = new Vector(0, 0, 0);
 		
         Spectrum f = bsdf->Sample_f(wo, &wi, outgoingBSDFSample, &pdf,
                                     BSDF_ALL, &flags, diffRay, reflectProb);
+	if (f.IsBlack() || pdf == 0.) {
+	  delete diffRay;
+	  break;
+	}
 
         specularBounce = (flags & BSDF_SPECULAR) != 0;
         pathThroughput *= f * AbsDot(wi, n) / pdf;
         ray = RayDifferential(p, wi, ray, isectp->rayEpsilon);
-		if (f.IsBlack() || pdf == 0.) {
-			delete diffRay;
-            break;
-		}
+	if (f.IsBlack() || pdf == 0.) {
+	  delete diffRay;
+	  break;
+	}
 
-		delete diffRay;
+	delete diffRay;
         // Possibly terminate the path
         if (bounces > 3) {
             float continueProbability = min(.5f, pathThroughput.y());

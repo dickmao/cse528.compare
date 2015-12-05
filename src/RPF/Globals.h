@@ -5,8 +5,13 @@
 #include <random>
 #include "CImg.h"
 
+class BandwidthSampler;
 void RPF(char* outputFolder, float* pbrtData, size_t pbrtWidth, 
-					  size_t pbrtHeight, size_t pbrtSpp, size_t pbrtSampleLength, int posCount, int colorCount, int featureCount, int randomCount, FILE* datafp);
+	 size_t pbrtHeight, size_t pbrtSpp, size_t pbrtSampleLength, int posCount, int colorCount, int featureCount, int randomCount, FILE* datafp);
+
+void RPF2(BandwidthSampler *sampler, char* outputFolder, float* pbrtData, size_t pbrtWidth, 
+		  size_t pbrtHeight, size_t pbrtSpp, size_t pbrtSampleLength, int posCount, int colorCount, int featureCount, int randomCount, FILE* datafp);
+
 
 using namespace std;
 using namespace cimg_library;
@@ -14,8 +19,6 @@ using namespace cimg_library;
 typedef unsigned char uchar;
 
 #define BUFFER_SIZE 1000
-
-// Sample indexes
 #define X_COORD		0
 #define Y_COORD		1
 #define COLOR_1		2
@@ -155,7 +158,7 @@ extern bool hasExplicitBlocks;
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 // Function for choosing random position in the array of normally distributed random numbers
-#define RAND rand()/((float)(RAND_MAX + 1)) 
+#define RAND ((float)(rand()/((float)(RAND_MAX))))
 
 
 //***** GAUSSIAN PARAMETERS *****//

@@ -26,12 +26,12 @@ float calculateMeanSSE(float* src, size_t length) {
     }
 	
 	// Sum up the four entries to get the total sum so far
-	float sum = cumulativeSum.m128_f32[0] + cumulativeSum.m128_f32[1] + cumulativeSum.m128_f32[2] + cumulativeSum.m128_f32[3];
+    float sum = cumulativeSum[0] + cumulativeSum[1] + cumulativeSum[2] + cumulativeSum[3];
 
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		sum += (*data).m128_f32[i];
+		sum += (*data)[i];
 
 	}
 
@@ -79,12 +79,12 @@ float calculateStdSSE(float* src, float mean, size_t length) {
     }
 	
 	// Add up the total so far
-	float squaredSum = cumulativeSum.m128_f32[0] + cumulativeSum.m128_f32[1] + cumulativeSum.m128_f32[2] + cumulativeSum.m128_f32[3];
+	float squaredSum = cumulativeSum[0] + cumulativeSum[1] + cumulativeSum[2] + cumulativeSum[3];
 
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		squaredSum += pow(((*data).m128_f32[i] - mean), 2);
+		squaredSum += pow(((*data)[i] - mean), 2);
 
 	}
 
@@ -134,7 +134,7 @@ void normalizeSSE(float* src, float mean, float std, float* result, size_t lengt
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		(*dest).m128_f32[i] = ((*data).m128_f32[i] - mean) * stdInv;
+		(*dest)[i] = ((*data)[i] - mean) * stdInv;
 
 	}
 
@@ -157,7 +157,7 @@ void subtractSquareScaleSSE(float* data1, float* data2, float* result, float alp
 	// Filter the colors of samples in pixel using bilateral filter
 	for(size_t i = 0; i < loopSize; i++) {
  
-		temp = _mm_sub_ps(*d1, *d2);
+	temp = _mm_sub_ps(*d1, *d2);
 		temp = _mm_mul_ps(temp, temp);
 		*dest = _mm_mul_ps(temp, scalar);
 		
@@ -170,7 +170,7 @@ void subtractSquareScaleSSE(float* data1, float* data2, float* result, float alp
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		(*dest).m128_f32[i] = alpha * pow(((*d1).m128_f32[i] - (*d2).m128_f32[i]), 2);
+		(*dest)[i] = alpha * pow(((*d1)[i] - (*d2)[i]), 2);
 
 	} 
 
@@ -202,7 +202,7 @@ void sumSSE(float* data1, float* data2, float* result, size_t length) {
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		(*dest).m128_f32[i] = (*d1).m128_f32[i] + (*d2).m128_f32[i];
+		(*dest)[i] = (*d1)[i] + (*d2)[i];
 
 	}
 
@@ -233,7 +233,7 @@ void multByValSSE(float* data, float* result, float alpha, size_t length) {
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		(*dest).m128_f32[i] = alpha * (*d).m128_f32[i];
+		(*dest)[i] = alpha * (*d)[i];
 
 	}
 
@@ -265,7 +265,7 @@ void multSSE(float* data1, float* data2, float* result, size_t length) {
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		(*dest).m128_f32[i] = (*d1).m128_f32[i] * (*d2).m128_f32[i];
+		(*dest)[i] = (*d1)[i] * (*d2)[i];
 
 	}
 
@@ -290,12 +290,12 @@ float sumAllElementsSSE(float* data, size_t length) {
 		d++; // Move on to the next four
 	}
 	
-	float result = temp.m128_f32[0] + temp.m128_f32[1] + temp.m128_f32[2] + temp.m128_f32[3];
+	float result = temp[0] + temp[1] + temp[2] + temp[3];
 
 	// Add in the extras
 	for(size_t i = 0; i < numOfExtras; i++) {
 
-		result += (*d).m128_f32[i];
+		result += (*d)[i];
 
 	}
 

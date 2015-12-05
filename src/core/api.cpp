@@ -99,6 +99,7 @@
 #include "samplers/lowdiscrepancy.h"
 #include "samplers/random.h"
 #include "samplers/stratified.h"
+#include "samplers/bandwidth.h"
 #include "shapes/cone.h"
 #include "shapes/cylinder.h"
 #include "shapes/disk.h"
@@ -109,11 +110,9 @@
 #include "shapes/paraboloid.h"
 #include "shapes/sphere.h"
 #include "shapes/trianglemesh.h"
-#include "shapes/wavefront.h"
 #include "textures/bilerp.h"
 #include "textures/checkerboard.h"
 #include "textures/constant.h"
-#include "textures/divide.h"
 #include "textures/dots.h"
 #include "textures/fbm.h"
 #include "textures/imagemap.h"
@@ -195,8 +194,6 @@ struct RenderOptions {
     mutable vector<VolumeRegion *> volumeRegions;
     map<string, vector<Reference<Primitive> > > instances;
     vector<Reference<Primitive> > *currentInstance;
-	string DirectLighting;
-	string BSDFLighting;
 };
 
 
@@ -213,8 +210,6 @@ RenderOptions::RenderOptions() {
     VolIntegratorName = "emission";
     CameraName = "perspective";
     currentInstance = NULL;
-	DirectLighting = "true";
-	BSDFLighting = "true";
 }
 
 
@@ -358,9 +353,6 @@ Reference<Shape> MakeShape(const string &name,
     else if (name == "nurbs")
         s = CreateNURBSShape(object2world, world2object, reverseOrientation,
                              paramSet);
-	else if (name == "wavefront") // MOD
-        s = CreateWaveFrontShape(object2world, world2object, reverseOrientation,
-                              paramSet);
     else
         Warning("Shape \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -449,8 +441,6 @@ Reference<Texture<float> > MakeFloatTexture(const string &name,
         tex = CreateMarbleFloatTexture(tex2world, tp);
     else if (name == "windy")
         tex = CreateWindyFloatTexture(tex2world, tp);
-	else if (name == "divide") // MOD
-		tex = CreateDivideFloatTexture(tex2world, tp);
     else
         Warning("Float texture \"%s\" unknown.", name.c_str());
     tp.ReportUnused();
@@ -644,11 +634,11 @@ Sampler *MakeSampler(const string &name,
         sampler = CreateLowDiscrepancySampler(paramSet, film, camera);
     else if (name == "random") {
         sampler = CreateRandomSampler(paramSet, film, camera);
-		isRandomSampler = true;
-	} else if (name == "stratified")
+	isRandomSampler = true;
+    } else if (name == "stratified")
         sampler = CreateStratifiedSampler(paramSet, film, camera);
     else
-        Warning("Sampler \"%s\" unknown.", name.c_str());
+	sampler = CreateBandwidthSampler(paramSet, film, camera);
     paramSet.ReportUnused();
     return sampler;
 }
@@ -677,10 +667,7 @@ Filter *MakeFilter(const string &name,
 Film *MakeFilm(const string &name,
     const ParamSet &paramSet, Filter *filter) {
     Film *film = NULL;
-    if (name == "image")
-        film = CreateImageFilm(paramSet, filter);
-    else
-        Warning("Film \"%s\" unknown.", name.c_str());
+    film = CreateImageFilm(paramSet, filter);
     paramSet.ReportUnused();
     return film;
 }
@@ -1263,7 +1250,8 @@ Renderer *RenderOptions::MakeRenderer() const {
                     RendererName.c_str());
         bool visIds = RendererParams.FindOneBool("visualizeobjectids", false);
         RendererParams.ReportUnused();
-        Sampler *sampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
+	//        Sampler *sampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
+	BandwidthSampler *sampler = CreateBandwidthSampler(SamplerParams, camera->film, camera);
         if (!sampler) Severe("Unable to create sampler.");
         // Create surface and volume integrators
         SurfaceIntegrator *surfaceIntegrator = MakeSurfaceIntegrator(SurfIntegratorName,
@@ -1273,7 +1261,7 @@ Renderer *RenderOptions::MakeRenderer() const {
             VolIntegratorParams);
         if (!volumeIntegrator) Severe("Unable to create volume integrator.");
         renderer = new SamplerRenderer(sampler, camera, surfaceIntegrator,
-                                       volumeIntegrator, visIds);
+                                       volumeIntegrator, visIds, RendererParams);
         // Warn if no light sources are defined
         if (lights.size() == 0)
             Warning("No light sources defined in scene; "

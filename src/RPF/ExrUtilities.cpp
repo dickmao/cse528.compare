@@ -6,7 +6,7 @@ using namespace Imath;
 FILE* OpenFile(char* fileName, char* type) {
 
 	FILE* fp;
-	fopen_s(&fp, fileName, type);
+	fp = fopen(fileName, type);
 
 	if(!fp) {
 		fprintf(stderr, "ERROR: Could not open dat file %s\n", fileName);
@@ -30,7 +30,7 @@ void readRgba1 (const char fileName[], Array2D<Rgba> &pixels, int &width, int &h
 
 }
 
-static void WriteEXRImage(const std::string &name, float *pixels, float *alpha, int xRes, int yRes,
+void WriteEXRImage(const std::string &name, float *pixels, float *alpha, int xRes, int yRes,
 												int totalXRes, int totalYRes, int xOffset, int yOffset) {
     Rgba *hrgba = new Rgba[xRes * yRes];
     for (int i = 0; i < xRes * yRes; ++i)

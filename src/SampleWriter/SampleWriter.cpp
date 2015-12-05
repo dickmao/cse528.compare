@@ -1,4 +1,7 @@
 #include "SampleWriter.h"
+#include "core/denoiser.h"
+
+using std::vector;
 
 SampleElem* SampleWriter::positions;
 SampleElem* SampleWriter::colors;
@@ -159,6 +162,33 @@ size_t SampleWriter::removeExtraData(SampleElem*& curData, int& posCount, int& c
 	return dataSize;
 }
 
+void SampleWriter::GetAdaptPixels(char *sceneName, float avgSpp, BandwidthSampler *sampler) 
+{
+    checkData();
+
+    SampleElem* fullData = new SampleElem[SAMPLE_LENGTH * numOfSamples];
+  
+    for(size_t i = 0; i < numOfSamples; i++) {
+	SampleElem data[SAMPLE_LENGTH];
+	memcpy(&data[POSITION], &positions[NUM_OF_POSITIONS * i], NUM_OF_POSITIONS * sizeof(SampleElem));
+	memcpy(&data[COLOR], &colors[NUM_OF_COLORS * i], NUM_OF_COLORS * sizeof(SampleElem));
+	memcpy(&data[FEATURE], &features[NUM_OF_FEATURES * i], NUM_OF_FEATURES * sizeof(SampleElem));
+	memcpy(&data[RANDOM], &randomParameters[NUM_OF_RANDOM_PARAMS * i], NUM_OF_RANDOM_PARAMS * sizeof(SampleElem));
+    
+	memcpy(&fullData[i*SAMPLE_LENGTH], data, SAMPLE_LENGTH * sizeof(SampleElem));
+    }
+  
+  
+    int posCount;
+    int colorCount;
+    int featureCount;
+    int randomCount;
+    sampleLength = removeExtraData(fullData, posCount, colorCount, featureCount, randomCount);
+    
+    RPF2(sampler, sceneName, fullData, width, height, spp, sampleLength, posCount, colorCount, featureCount, randomCount, NULL);
+}
+
+
 void SampleWriter::ProcessData(char* sceneName) {
 
 	//************************** WRITE SAMPLE DATA ***********************//
@@ -268,8 +298,7 @@ void SampleWriter::ProcessData(char* sceneName) {
 
 	#endif
 
-	RPF(sceneName, fullData, width, height, spp, sampleLength, posCount, colorCount, featureCount, randomCount, NULL);
-
+		RPF(sceneName, fullData, width, height, spp, sampleLength, posCount, colorCount, featureCount, randomCount, NULL);
 }
 
 
@@ -438,8 +467,7 @@ void SampleWriter::saveImg(char* fileName, CImg<SampleElem>* img, bool shouldTon
 FILE* SampleWriter::openDatFile(char* fileName, char* mode) {
 	
 	// Open dat file with samples
-	FILE* fp;
-	fopen_s(&fp, fileName, mode);
+	FILE* fp = fopen(fileName, mode);
 	if(!fp) {
 		fprintf(stderr, "ERROR: Could not locate Sample file %s\n", fileName);
 		getchar();
@@ -565,7 +593,8 @@ void SampleWriter::setPosition(size_t x, size_t y, size_t k, SampleElem* positio
 
 void SampleWriter::setPosition(size_t index, SampleElem position) {
 	assert(index < NUM_OF_POSITIONS * numOfSamples);
-	assert(positions[index] == 0);
+// let it rewrite for each new task
+//	assert(positions[index] == 0);
 	positions[index] = position;
 }
 
@@ -590,7 +619,8 @@ void SampleWriter::setColor(size_t x, size_t y, size_t k, SampleElem* colors) {
 
 void SampleWriter::setColor(size_t index, SampleElem color) {
 	assert(index < NUM_OF_COLORS * numOfSamples);
-	assert(colors[index] == 0);
+	// let rewrite for each new task
+	//assert(colors[index] == 0);
 	colors[index] = color;
 }
 
@@ -641,7 +671,8 @@ void SampleWriter::setRandomParameter(size_t x, size_t y, size_t k, SampleElem* 
 
 void SampleWriter::setRandomParameter(size_t index, SampleElem randomParameter) {
 	assert(index < NUM_OF_RANDOM_PARAMS * numOfSamples);
-	assert(randomParameters[index] == 0);
+//let rewrite for each new task
+//	assert(randomParameters[index] == 0);
 	randomParameters[index] = randomParameter;
 }
 

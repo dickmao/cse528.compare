@@ -36,8 +36,10 @@
 #include "spectrum.h"
 #include "parallel.h"
 #include "imageio.h"
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "../SampleWriter/Globals.h"	// MOD
-#include <direct.h>						// MOD
+// #include <direct.h>						// MOD
 
 extern int iter;						// MOD
 extern char sceneName[BUFFER_SIZE];		// MOD
@@ -270,7 +272,7 @@ ImageFilm *CreateImageFilm(const ParamSet &params, Filter *filter) {
 	lastslash = (lastslash > lastbackslash) ? lastslash : lastbackslash;
 	if (lastslash != std::string::npos) {
 		std::string outputFolder = filename.substr(0, lastslash + 1);
-		_mkdir(outputFolder.c_str());
+		mkdir(outputFolder.c_str(),0755);
 		strerror(errno);
 	}
 						

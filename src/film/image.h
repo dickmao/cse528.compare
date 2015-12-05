@@ -65,7 +65,10 @@ private:
     Filter *filter;
     float cropWindow[4];
     string filename;
-    int xPixelStart, yPixelStart, xPixelCount, yPixelCount;
+    int xPixelStart, yPixelStart;
+public:
+    int xPixelCount, yPixelCount;
+private:
     struct Pixel {
         Pixel() {
             for (int i = 0; i < 3; ++i) Lxyz[i] = splatXYZ[i] = 0.f;

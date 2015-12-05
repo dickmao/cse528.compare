@@ -41,12 +41,14 @@
 #include "renderer.h"
 #include "parallel.h"
 
+class BandwidthSampler;
+class LDSampler;
 // SamplerRenderer Declarations
 class SamplerRenderer : public Renderer {
 public:
     // SamplerRenderer Public Methods
-    SamplerRenderer(Sampler *s, Camera *c, SurfaceIntegrator *si,
-                    VolumeIntegrator *vi, bool visIds);
+    SamplerRenderer(BandwidthSampler *bw, Camera *c, SurfaceIntegrator *si,
+                    VolumeIntegrator *vi, bool visIds, const ParamSet& params);
     ~SamplerRenderer();
     void Render(const Scene *scene);
     Spectrum Li(const Scene *scene, const RayDifferential &ray,
@@ -57,10 +59,11 @@ public:
 private:
     // SamplerRenderer Private Data
     bool visualizeObjectIds;
-    Sampler *sampler;
+    BandwidthSampler *bw;
     Camera *camera;
     SurfaceIntegrator *surfaceIntegrator;
     VolumeIntegrator *volumeIntegrator;
+    int adaptIterations;
 };
 
 
@@ -71,7 +74,9 @@ public:
     // SamplerRendererTask Public Methods
     SamplerRendererTask(const Scene *sc, Renderer *ren, Camera *c,
                         ProgressReporter &pr, Sampler *ms, Sample *sam, 
-                        bool visIds, int tn, int tc)
+                        bool visIds, int tn, int tc,
+			std::vector<std::vector<int > > *pixOff = 0,
+			std::vector<std::vector<int > > *pixSmp = 0)
       : reporter(pr)
     {
         scene = sc; renderer = ren; camera = c; mainSampler = ms;

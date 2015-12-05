@@ -4,7 +4,7 @@
 #include "Globals.h"
 #include <assert.h>
 
-#define OPENEXR_DLL
+/* #define OPENEXR_DLL */
 #include <ImfRgbaFile.h>
 #include <ImfOutputFile.h>
 #include <ImfInputFile.h>

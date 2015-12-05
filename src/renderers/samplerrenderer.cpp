@@ -43,6 +43,7 @@
 #include "intersection.h"
 #include "../SampleWriter/SampleWriter.h"	// MOD
 #include "samplers/random.h"				// MOD
+#include "samplers/bandwidth.h"				
 
 char sceneName[BUFFER_SIZE];				// MOD
 int pbrtSamplesPerPixel;					// MOD
@@ -53,9 +54,9 @@ static uint32_t pbrt_hash(char *key, uint32_t len)
 {
     uint32_t hash = 0, i;
     for (hash=0, i=0; i<len; ++i) {
-        hash += key[i];
-        hash += (hash << 10);
-        hash ^= (hash >> 6);
+	hash += key[i];
+	hash += (hash << 10);
+	hash ^= (hash >> 6);
     }
     hash += (hash << 3);
     hash ^= (hash >> 11);
@@ -91,10 +92,8 @@ void SamplerRendererTask::Run() {
 
     // Get samples from _Sampler_ and update image
     int sampleCount;
-
+    
     while ((sampleCount = sampler->GetMoreSamples(samples, rng)) > 0) {
-
-			
 		if(numSamplesCompleted[taskNum] > 1000) {
 			reporter.Update(numSamplesCompleted[taskNum]);
 			numSamplesCompleted[taskNum] = 0;
@@ -235,19 +234,20 @@ void SamplerRendererTask::Run() {
 
 
 // SamplerRenderer Method Definitions
-SamplerRenderer::SamplerRenderer(Sampler *s, Camera *c,
+SamplerRenderer::SamplerRenderer(BandwidthSampler *_bw, Camera *c,
                                  SurfaceIntegrator *si, VolumeIntegrator *vi,
-                                 bool visIds) {
-    sampler = s;
+                                 bool visIds, const ParamSet& params) {
+    bw = _bw;
     camera = c;
     surfaceIntegrator = si;
     volumeIntegrator = vi;
     visualizeObjectIds = visIds;
+    adaptIterations = params.FindOneInt("adaptIterations", 100);
 }
 
 
 SamplerRenderer::~SamplerRenderer() {
-    delete sampler;
+    delete bw;
     delete camera;
     delete surfaceIntegrator;
     delete volumeIntegrator;
@@ -263,55 +263,63 @@ void SamplerRenderer::Render(const Scene *scene) {
     PBRT_FINISHED_PREPROCESSING();
     PBRT_STARTED_RENDERING();
     // Allocate and initialize _sample_
-    Sample *sample = new Sample(sampler, surfaceIntegrator,
+    Sample *sample = new Sample(bw, surfaceIntegrator,
                                 volumeIntegrator, scene);
 
     // Create and launch _SamplerRendererTask_s for rendering image
 
     // Compute number of _SamplerRendererTask_s to create for rendering
     int nPixels = camera->film->xResolution * camera->film->yResolution;
-	int nTasks;
-	nTasks = max(32 * NumSystemCores(), nPixels / (16*16)); 
-	nTasks = RoundUpPow2(nTasks); 
-	#if SAVE_SAMPLES
-
-		SampleWriter::initialize((size_t) camera->film->xResolution, (size_t) camera->film->yResolution, (size_t) sampler->samplesPerPixel); // MOD
-	
-	#endif
-
-	int numOfSamples = camera->film->xResolution * camera->film->yResolution * sampler->samplesPerPixel;
-
-    ProgressReporter reporter(numOfSamples, "Rendering");
+    int nTasks;
+    nTasks = max(32 * NumSystemCores(), nPixels / (16*16)); 
+    nTasks = RoundUpPow2(nTasks); 
+#if SAVE_SAMPLES
+    
+    SampleWriter::initialize((size_t) camera->film->xResolution, (size_t) camera->film->yResolution, (size_t) bw->samplesPerPixel); // MOD
+    
+#endif
+    
+    int numOfSamples = camera->film->xResolution * camera->film->yResolution * bw->samplesPerPixel;
+    
+    ProgressReporter reporter(nTasks, "Initial Sampling");    
     vector<Task *> renderTasks;
-	numSamplesCompleted = new int[nTasks];
-	memset(numSamplesCompleted, 0, nTasks * sizeof(int));
-    for (int i = 0; i < nTasks; ++i)
+    numSamplesCompleted = new int[nTasks];
+    memset(numSamplesCompleted, 0, nTasks * sizeof(int));
+
+    for (int i = 0; i < nTasks; ++i) {
         renderTasks.push_back(new SamplerRendererTask(scene, this, camera,
-                                                      reporter, sampler, sample, 
+                                                      reporter, bw, sample,
                                                       visualizeObjectIds, 
                                                       nTasks-1-i, nTasks));
+    }
     EnqueueTasks(renderTasks);
     WaitForAllTasks();
     for (uint32_t i = 0; i < renderTasks.size(); ++i)
-        delete renderTasks[i];
-	delete[] numSamplesCompleted;
-    reporter.Done();
+        delete renderTasks[i];  
+    reporter.Done();        
+
+    memset(numSamplesCompleted, 0, adaptIterations * sizeof(int));
+    bw->SetAdaptiveMode();
+    ProgressReporter asReporter(adaptIterations, "Adaptive Sampling");
+    for (int i = 0; i < adaptIterations; ++i) {
+	renderTasks.clear();
+	SampleWriter::GetAdaptPixels(sceneName, 8, bw);
+        renderTasks.push_back(new SamplerRendererTask(scene, this, camera,
+                                                      asReporter, bw, sample,
+                                                      visualizeObjectIds, 
+                                                      adaptIterations-1-i, adaptIterations));
+	EnqueueTasks(renderTasks);
+	WaitForAllTasks();
+	for (uint32_t i = 0; i < renderTasks.size(); ++i)
+	    delete renderTasks[i];  
+    }
+    asReporter.Done();
+    
     PBRT_FINISHED_RENDERING();
-
+    
     // Clean up after rendering and store final image
+    camera->film->WriteImage();
     delete sample;
-
-	//********************** MOD ************************//
-
-	#if SAVE_SAMPLES
-
-		
-		SampleWriter::ProcessData(sceneName); // MOD
-
-	#endif
-
-	//***************************************************//
-
 }
 
 

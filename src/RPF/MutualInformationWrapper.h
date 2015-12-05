@@ -5,7 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
-#include <windows.h>
 #include "Globals.h"
 
 // Finds the mutual information of X and Y Random Variables with pdf X of size1 and pdf Y of size2 and joint pdf

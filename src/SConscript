@@ -1,15 +1,19 @@
-# -*- mode: python -*-
+#  -*- mode: python -*-
 
 import sys
 arch = sys.platform
 
-Import('env', 'has_dtrace', 'parallel_libs', 'exr_libs', 'tiff_libs')
+Import('env', 'has_dtrace', 'parallel_libs', 'exr_libs', 'tiff_libs', 'X_libs', 'omp_libs')
 
 if has_dtrace == True:
     env.DTrace('core/dtrace.h', 'core/dtrace.d')
     env.Depends('core/dtrace.h', 'core/dtrace.d')
 
 renderer_src = [ 'main/pbrt.cpp' ]
+
+samplewriter_src = ['SampleWriter/SampleWriter.cpp']
+rpf_src = ['RPF/RPF.cpp', 'RPF/SampleSet.cpp',
+            'RPF/Globals.cpp', 'RPF/MutualInformationWrapper.cpp', 'RPF/Main.cpp', 'RPF/PreComputeGaussian.cpp', 'RPF/ExrUtilities.cpp', 'RPF/SSE_Math.cpp', 'RPF/SSE_Wrapper.cpp']
 
 core_src = [ 'core/api.cpp',           'core/camera.cpp',         'core/diffgeom.cpp',
              'core/error.cpp',         'core/film.cpp',           'core/fileutil.cpp',
@@ -24,7 +28,7 @@ core_src = [ 'core/api.cpp',           'core/camera.cpp',         'core/diffgeom
              'core/sh.cpp',            'core/shrots.cpp',         'core/shape.cpp',
              'core/spectrum.cpp',      'core/targa.c',
              'core/texture.cpp',       'core/timer.cpp', 
-             'core/transform.cpp',     'core/volume.cpp' ]
+             'core/transform.cpp',     'core/volume.cpp', 'core/kernel2d.cpp', 'core/denoiser.cpp' ]
 
 parser_flex = env.CXXFile('core/pbrtlex.ll')
 parser_bison = env.CXXFile('core/pbrtparse.yy')
@@ -39,7 +43,7 @@ accelerators_src = [ 'accelerators/bvh.cpp',
 cameras_src = [ 'cameras/environment.cpp', 
                 'cameras/orthographic.cpp', 
                 'cameras/perspective.cpp' ]
-film_src = [ 'film/image.cpp' ]
+film_src = [ 'film/image.cpp', 'film/smooth.cpp' ]
 filters_src = [ 'filters/box.cpp',              'filters/gaussian.cpp', 
                 'filters/mitchell.cpp',         'filters/sinc.cpp',
                 'filters/triangle.cpp' ]
@@ -65,34 +69,39 @@ materials_src = [ 'materials/glass.cpp',         'materials/kdsubsurface.cpp',
 renderers_src = [ 'renderers/aggregatetest.cpp',   'renderers/createprobes.cpp',
                   'renderers/metropolis.cpp',      'renderers/samplerrenderer.cpp',
                   'renderers/surfacepoints.cpp' ]
-samplers_src = [ 'samplers/adaptive.cpp',         'samplers/bestcandidate.cpp',
-                 'samplers/halton.cpp',           'samplers/lowdiscrepancy.cpp', 
-                 'samplers/random.cpp',           'samplers/stratified.cpp' ]
+samplers_src = [ 'samplers/bandwidth.cpp',         'samplers/bestcandidate.cpp',
+                 'samplers/halton.cpp',           'samplers/lowdiscrepancy.cpp',
+                 'samplers/random.cpp',           'samplers/stratified.cpp' ,
+'samplers/adaptive.cpp'
+                  ]
 shapes_src = [ 'shapes/cone.cpp',        'shapes/cylinder.cpp',
                'shapes/disk.cpp',        'shapes/heightfield.cpp',
                'shapes/hyperboloid.cpp', 'shapes/loopsubdiv.cpp',
                'shapes/nurbs.cpp',       'shapes/paraboloid.cpp',
-               'shapes/sphere.cpp',      'shapes/trianglemesh.cpp' ]
+               'shapes/sphere.cpp',      'shapes/trianglemesh.cpp',
+               'shapes/wavefront.cpp']
 textures_src = [ 'textures/bilerp.cpp',          'textures/checkerboard.cpp',
                  'textures/constant.cpp',        'textures/dots.cpp',
                  'textures/fbm.cpp',             'textures/imagemap.cpp', 
                  'textures/marble.cpp',          'textures/mix.cpp',
                  'textures/scale.cpp',           'textures/uv.cpp',
-                 'textures/windy.cpp',           'textures/wrinkled.cpp' ]
+                 'textures/windy.cpp',           'textures/wrinkled.cpp',
+                 'textures/divide.cpp']
 volumes_src = [ 'volumes/exponential.cpp',       'volumes/homogeneous.cpp', 
                 'volumes/volumegrid.cpp' ]
 
 
 lib_src = [ core_src + accelerators_src + cameras_src + film_src + filters_src +
             integrators_src + lights_src + materials_src + renderers_src +
-            samplers_src + shapes_src + textures_src + volumes_src ]
+            samplers_src + shapes_src + textures_src + volumes_src + samplewriter_src + rpf_src]
 
 output = { }
 output['pbrt_lib'] = env.StaticLibrary('libpbrt', lib_src)
 
 env_libs = [ ]
 output['pbrt'] = env.Program('pbrt', renderer_src + output['pbrt_lib'],
-                             LIBS = env_libs + exr_libs + parallel_libs)
+                             LIBS = env_libs + exr_libs + parallel_libs + X_libs + omp_libs)
+
 if arch == 'win32':
     env.AddPostAction(output['pbrt'], 
                       'mt.exe /outputresource:"$TARGET;#1" /manifest "${TARGET}.manifest" /nologo')
@@ -106,7 +115,7 @@ if len(exr_libs) > 0:
                                    LIBS = env_libs + exr_libs)
     output['bsdftest'] = env.Program('bsdftest', [ 'tools/bsdftest.cpp' ] + 
                                      output['pbrt_lib'], 
-                                     LIBS = env_libs + exr_libs + parallel_libs)
+                                     LIBS = env_libs + exr_libs + parallel_libs + X_libs + omp_libs)
     output['defaults'] = output['defaults'] +  \
         [ output['exrdiff'], output['exravg'], output['bsdftest'] ]
 

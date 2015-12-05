@@ -35,6 +35,7 @@
 #include "samplers/lowdiscrepancy.h"
 #include "camera.h"
 #include "montecarlo.h"
+#include <iostream>
 
 extern int pbrtSamplesPerPixel;
 

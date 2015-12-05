@@ -3,22 +3,24 @@
 
 #include <iostream>
 #include <assert.h>
-#include <Windows.h>
 #include <stdio.h>
-#include <direct.h>
+#include <vector>
+// #include <direct.h>
 #include "Globals.h"
 #include "CImg.h"
 #include "../RPF/Globals.h"
 
 using namespace cimg_library;
 
-class SAMPLER_API SampleWriter {
+class BandwidthSampler;
+class SampleWriter {
 
 public:
 
 	static void initialize(size_t width, size_t height, size_t samplesPerPixel);
 
 	static void ProcessData(char* sceneName);
+	static void GetAdaptPixels(char *sceneName, float avgSpp, BandwidthSampler *sampler);
 	static void readSamplesFromFile(char* fileName, SampleElem* data);
 	static void reconstructImg(SampleElem* data);
 

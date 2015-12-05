@@ -21,6 +21,12 @@ build_64bit = True
 
 parallel_libs = [ 'pthread' ]
 Export('parallel_libs')
+
+omp_libs = [ 'gomp' ]
+Export('omp_libs')
+
+X_libs = [ 'X11' ]
+Export('X_libs')
     
 tiff_libs = [ ]
 # tiff_libs = [ 'tiff' ]
@@ -47,7 +53,7 @@ def setup_nice_print(env):
         env['LINKCOMSTR'] = "Linking $TARGET"
         env['ARCOMSTR'] = "Linking $TARGET"
 
-env = Environment(CCFLAGS = [ '-Wall', '-g' ],
+env = Environment(CCFLAGS = [ '-g', '-std=c++11', '-w', '-fopenmp' ],
                   CPPPATH = [ '#core', '#', '.' ] + tiff_includes,
                   LIBPATH = tiff_libdir,
                   YACCFLAGS = [ '-d', '-v', '-t' ],
@@ -95,21 +101,26 @@ release_env = env.Clone()
 release_env.Append(CCFLAGS = [ '-O2', '-finline-functions' ])
 release_env.Append(CCFLAGS = [ '-msse3', '-mfpmath=sse', '-march=nocona' ])
 release_env.Append(CPPDEFINES = [ 'NDEBUG' ])
-build_envs['release'] = release_env
+# build_envs['release'] = release_env
 
 stats_env = release_env.Clone()
 if has_dtrace:
     stats_env.Append(CPPDEFINES = [ 'PBRT_PROBES_DTRACE' ])
 else:
     stats_env.Append(CPPDEFINES = [ 'PBRT_PROBES_COUNTERS' ])
-build_envs['stats'] = stats_env
+#build_envs['stats'] = stats_env
 
 release_env.Append(CPPDEFINES = [ 'PBRT_PROBES_NONE' ])
+
+
 
 for target in build_envs:
     env = build_envs[target]
     Export('env')
     output = SConscript(dirs = '.',
-                        variant_dir = 'build/' + arch + '-' + target)
+                        variant_dir = 'build/' + arch + '-' + target,
+                         duplicate=0)
     env.Alias(target, output['defaults'])
     env.Default(target)
+
+

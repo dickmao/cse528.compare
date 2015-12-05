@@ -8,16 +8,17 @@
 #include <math.h>
 #include <omp.h>
 #include <fstream>
-#include "PreComputeGaussian.h"
 #include "Globals.h"
+#include "PreComputeGaussian.h"
 #include "CImg.h"
 #include "SampleSet.h"
 
-#include "../core/Timer.h"
+#include "../core/timer.h"
 
 using namespace std;
 using namespace cimg_library;
 
+class BandwidthSampler;
 extern SampleSet* samples; 
 
 // External functions used here but defined in MKL_Utils.h
@@ -47,6 +48,7 @@ void checkParameters();
 // is finished, it has the noisy image in origImg and the filtered output
 // in rpfImg
 void RPF(CImg<float>* rpfImg, CImg<float>* origImg);
+void RPF2(CImg<float>* rpfImg, CImg<float>* origImg, BandwidthSampler *sampler); 
 
 // Choose samples in block of size b around pixel at x, y. The maxNumOfSamples are specified
 // and the selected samples are stored in neighboringSamples. The samples are also normalized 
@@ -59,7 +61,7 @@ float computeFeatureWeights(int t, SampleSet* neighboringSamples, float* alpha, 
 
 // The joint bilateral filter is applied with the previously calculated weights to get the color at
 // the current pixel. The result is stored in the neighboringSamples set
-void filterColorSamples(SampleSet* neighboringSamples, float* alpha, float* beta, float contributionCR, int t);
+float filterColorSamples(SampleSet* neighboringSamples, float* alpha, float* beta, float contributionCR, int t);
 
 // Perform boxFiltering on the samples in the "samples" array and save in img. Also requires user to 
 // specify whether the box filter is being applied on the original or filtered samples.

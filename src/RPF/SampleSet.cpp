@@ -1,4 +1,5 @@
 #include "SampleSet.h"
+#include <malloc.h>
 
 // Main set of all samples in the image
 extern SampleSet* samples; 
@@ -11,7 +12,7 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 	randomValuesInitialized = false;
 	
 	// Every SampleSet has a cPrime vector that corresponds to the colors to filter for this iteration
-	cPrime = (float*) _aligned_malloc(NUM_OF_COLORS * totalSize * sizeof(float), ALIGNMENT);
+	cPrime = (float*) memalign(ALIGNMENT, NUM_OF_COLORS * totalSize * sizeof(float));
 	memset(cPrime, 0, NUM_OF_COLORS * totalSize *sizeof(float));
 
 	// The small blocks (not the main "samples" block that carries all of the samples) will initialize this data
@@ -20,9 +21,9 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 		// Allocate memory for all of the member arrays
 
 		//***** DATA/WEIGHTS *****//
-		data = (float*) _aligned_malloc(sampleLength * totalSize * sizeof(float), ALIGNMENT);
-		pixelColors = (float*) _aligned_malloc(NUM_OF_COLORS * samplesPerPixel * sizeof(float), ALIGNMENT);	
-		alpha = new float[NUM_OF_COLORS];
+	  data = (float*) memalign(ALIGNMENT, sampleLength * totalSize * sizeof(float));
+	  pixelColors = (float*) memalign(ALIGNMENT, NUM_OF_COLORS * samplesPerPixel * sizeof(float));	
+	  alpha = new float[NUM_OF_COLORS];
 		beta = new float[numOfFeat];
 
 		memset(data, 0, sampleLength * totalSize *sizeof(float));
@@ -34,9 +35,9 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 		//***** STATISTICS *****//
 		pixelFeatureMu = new float[numOfFeat];
 		pixelFeatureSigma = new float[numOfFeat];
-		dataMu = (float*) _aligned_malloc(sampleLength * sizeof(float), ALIGNMENT);
-		dataSigma = (float*) _aligned_malloc(sampleLength * sizeof(float), ALIGNMENT);
-		normalizedData = (float*) _aligned_malloc(sampleLength * totalSize * sizeof(float), ALIGNMENT);
+		dataMu = (float*) memalign(ALIGNMENT, sampleLength * sizeof(float));
+		dataSigma = (float*) memalign(ALIGNMENT, sampleLength * sizeof(float));
+		normalizedData = (float*) memalign(ALIGNMENT, sampleLength * totalSize * sizeof(float));
 
 		memset(pixelFeatureMu, 0, numOfFeat * sizeof(float));
 		memset(pixelFeatureSigma, 0, numOfFeat * sizeof(float));
@@ -48,7 +49,7 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 		//***** PROBABILITY DISTRIBUTIONS *****// 
 		histograms = new int[sampleLength * totalSize]; 
 		binSizes = new int[sampleLength];
-		PDFs = (float*) _aligned_malloc(sampleLength * MAX_NUM_OF_BINS * sizeof(float), ALIGNMENT); // OPTIMIZATION: allocate pdfs on the fly to correct size?
+		PDFs = (float*) memalign(ALIGNMENT, sampleLength * MAX_NUM_OF_BINS * sizeof(float)); // OPTIMIZATION: allocate pdfs on the fly to correct size?
 
 		memset(histograms, 0, sampleLength * totalSize * sizeof(int));
 		memset(binSizes, 0, sampleLength * sizeof(int));
@@ -56,13 +57,13 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 		
 
 		//***** SSE BUFFERS *****// 
-		normColorBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		normFeatureBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		colorBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		featureBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		tempStorageBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		weightsBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
-		tempWeightsBuffer = (float*) _aligned_malloc(totalSize * sizeof(float), ALIGNMENT);
+		normColorBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		normFeatureBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		colorBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		featureBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		tempStorageBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		weightsBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
+		tempWeightsBuffer = (float*) memalign(ALIGNMENT, totalSize * sizeof(float));
 		
 		memset(normColorBuffer, 0, totalSize * sizeof(int));
 		memset(normFeatureBuffer, 0, totalSize * sizeof(int));
@@ -86,7 +87,7 @@ SampleSet::SampleSet(size_t size, bool initializeData) {
 
 		// Holds the filtered color values of the current iteration. At the end of the iteration it clobbers
 		// the cPrime vector so that the values can be used for the following iteration
-		cDoublePrime = (float*) _aligned_malloc(NUM_OF_COLORS * totalSize * sizeof(float), ALIGNMENT);
+		cDoublePrime = (float*) memalign(ALIGNMENT, NUM_OF_COLORS * totalSize * sizeof(float));
 		memset(cDoublePrime, 0, NUM_OF_COLORS * totalSize *sizeof(float));
 		
 	}
@@ -100,14 +101,14 @@ SampleSet::~SampleSet() {
 	
 	// Clean up
 
-	_aligned_free(cPrime);
+  free(cPrime);
 	
 	// If small block
 	if(additionalDataInitialized) {
 
 		//***** DATA/WEIGHTS *****//
-		_aligned_free(data);
-		_aligned_free(pixelColors);
+		free(data);
+		free(pixelColors);
 		delete[] alpha;
 		delete[] beta;
 
@@ -115,24 +116,24 @@ SampleSet::~SampleSet() {
 		//***** STATISTICS *****//
 		delete[] pixelFeatureMu;
 		delete[] pixelFeatureSigma;
-		_aligned_free(dataMu);
-		_aligned_free(dataSigma);
-		_aligned_free(normalizedData);
+		free(dataMu);
+		free(dataSigma);
+		free(normalizedData);
 
 
 		//***** PROBABILITY DISTRIBUTIONS *****//
 		delete[] histograms;
 		delete[] binSizes;
-		_aligned_free(PDFs);
+		free(PDFs);
 		
 		//***** SSE BUFFERS *****//
-		_aligned_free(normColorBuffer);
-		_aligned_free(normFeatureBuffer);
-		_aligned_free(colorBuffer);
-		_aligned_free(featureBuffer);
-		_aligned_free(tempStorageBuffer);
-		_aligned_free(weightsBuffer);
-		_aligned_free(tempWeightsBuffer);
+		free(normColorBuffer);
+		free(normFeatureBuffer);
+		free(colorBuffer);
+		free(featureBuffer);
+		free(tempStorageBuffer);
+		free(weightsBuffer);
+		free(tempWeightsBuffer);
 
 	
 	// If main sample block
@@ -144,7 +145,7 @@ SampleSet::~SampleSet() {
 		}
 		delete[] sampleInfo;
 
-		_aligned_free(cDoublePrime);
+		free(cDoublePrime);
 
 	}
 
@@ -383,7 +384,7 @@ void SampleSet::generateRandomValues(size_t size, float sigma) {
 	assert(!randomValuesInitialized);
 
 	// Allocate the random arrays
-	randomIndexes = new float[NUM_OF_POSITIONS * size * RANDOM_SET_SIZE * sizeof(float)];
+	randomIndexes = new float[NUM_OF_POSITIONS * size * RANDOM_SET_SIZE];
 	integerIndexes = new int[3*size];
 	randomValuesInitialized = true;
 	
@@ -402,8 +403,8 @@ void SampleSet::generateRandomValues(size_t size, float sigma) {
 void SampleSet::generateRandomValues(size_t size) {
 
 	// Find a random offset into the normal random values
-	size_t index = size_t(2 * RAND * (RANDOM_SET_SIZE - 1) * size); 
-	currentRandomIndexes = randomIndexes + index;
+  size_t index = size_t(2 * RAND * (RANDOM_SET_SIZE - 1) * size); 
+  currentRandomIndexes = randomIndexes + index;
 
 }
 
